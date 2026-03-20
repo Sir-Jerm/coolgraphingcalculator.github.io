@@ -3,20 +3,28 @@
     <head>
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <title>3d Geometric Shapes</title>
+        <title>Jerm's 3D Engine</title>
         <link rel="icon" type="image/x-icon" href="/favicon_io/favicon.ico">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" href="main.css">
     </head>
     <body>
+        <p>Keybinds: 
+            w -> forward;
+            s -> backward;
+            a -> left;
+            d -> right;
+            q -> clockwise rotation;
+            e -> counterclockwise rotation.
+        </p>
         <div style="width:fit-content;height: auto; margin-left: 2px;">
             <div>
                 <input style="width:50vw" type="text" id="vectors" value="Vector Equations only">
                 <button id="enter" onclick="
                     let inputs= document.getElementById('vectors').value.split(',')
                 
-                    vectorGraphing(inputs[0], inputs[1], inputs[2], 0.5)"
+                    vectorGraphing(inputs[0], inputs[1], inputs[2], 1)"
                 >Enter Vector Equations</button>
                 <p>
                     Syntax: (x-axis Equation), (y-axis equation), (z-axis equation).
@@ -26,13 +34,13 @@
             </div>
 
             <div>
-                <input style="width:50vw" type="text" id="points" value="Points Equations only">
+                <input style="width:50vw" type="text" id="points" value="Parametric Equations only">
                 <button id="enter" onclick="
-                    grapherPointEqu(document.getElementById('points').value,max)"
-                >Enter Point Equation</button>
+                    grapherParametricEqu(document.getElementById('points').value,5,0.2)"
+                >Enter Paramertic Surface Equation</button>
                 <p>
                     Syntax: (x-axis Equation), (y-axis equation), (z-axis equation).
-                    Ex: cos(x)*cos(y)*2 , cos(x)*sin(y)*2 , sin(x)*2 .
+                    Ex: (3+2*sin(x))*cos(y),(3+2*sin(x))*sin(y),2*cos(x).
                     Z is not a variable
                 </p>
             </div>
@@ -47,7 +55,7 @@
                     For Regular Equation use sqrt() for the Square root function. 
                     Sin(), cos(), and tan() are in radians.
                     Do not use equals sign. 
-                    Use x & y as variables. ** for exponetial. * for multiplication. / for division.
+                    Use x & y as variables. ^ for exponetial. * for multiplication. / for division.
 
                 </p>
                 <a href="https://www.w3schools.com/js/js_math.asp" target="_blank">Use this for functions</a>
@@ -60,6 +68,7 @@
                     max=Number(document.getElementById('boundradius').value);
                     grapherEqu(`${universalEquation}`,max);
                    ">Enter Length</button>
+                   Length of cube Boundary is 5
             </div>
 
             <div>
@@ -68,9 +77,11 @@
                     universalAdder=Number(document.getElementById('adder').value);
                     grapherEqu(`${universalEquation}`,max);
                 ">Enter Distance</button>
+                    A good preformance-based distance between points during rendering is 0.3
             </div>
         </div>
         <canvas></canvas>
         <script src="main.js" async defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/mathjs@11/lib/browser/math.js"></script>
     </body>
 </html>
