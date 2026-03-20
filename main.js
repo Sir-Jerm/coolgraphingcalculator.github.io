@@ -27,7 +27,7 @@ function calculationForRealToPix(x, y, z) {
     (factor * (y - camera.pos[1]) / (z - camera.pos[2])) + (10 * cw / 45)];
 }
 function realPointToPixPoint(x, y, z) {
-    let p = 0.1 + camera.pos[2] - z;
+    let p = 0//0.1 + camera.pos[2] - z;
     if (z > camera.pos[2]) return calculationForRealToPix(x, y, z)
     else return calculationForRealToPix(x, y, z + p);
 }
@@ -117,6 +117,49 @@ function changeCameraPos(pos) {
     }
 }
 
+/**
+ * The following is adapted and substantially copied from https://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion as of 21 Feb 2026.
+ * Converts an HSL color value to RGB. Conversion formula
+ * adapted from https://en.wikipedia.org/wiki/HSL_color_space.
+ * Assumes h, s, and l are contained in the set [0, 1] and
+ * returns r, g, and b in the set [0, 255].
+ *
+ * @param   {number}  h       The hue
+ * @param   {number}  s       The saturation
+ * @param   {number}  l       The lightness
+ * @return  {string}           The RGB representation
+ */
+function hueToRgbOG(p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+}
+
+function hslToRgb(color) {
+    let parts = color.trim().split(',');
+
+    let h = parseFloat(parts[0].replace('hsl(', '')) / 360;
+    let s = parseFloat(parts[1]) / 100;
+    let l = parseFloat(parts[2].replace('%)', '')) / 100;
+
+    let r, g, b;
+
+    if (s === 0) {
+        r = g = b = l;
+    } else {
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+
+        r = hueToRgbOG(p, q, h + 1 / 3);
+        g = hueToRgbOG(p, q, h);
+        b = hueToRgbOG(p, q, h - 1 / 3);
+    }
+
+    return `${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}`;
+}
 class Point {
     static all = {};
     static allArray = [];
@@ -127,11 +170,11 @@ class Point {
      * @param {string} color 
      * @param {string} extra 
      */
-    constructor(posReal, display, color = 'hsl(1,100%,50%)', extra = null) {
+    constructor(posReal, display, color = `hsl(${distance3D(posReal, [0, 0, 0])}*10,100%,20%)`, extra = null) {
         this.posReal = posReal;
         this.posPix = realPointToPixPoint(posReal);
         //this.posPix = distanceFunctionDistortion(posReal);
-        this.radiusReal = 0.1;
+        this.radiusReal = 0.001;
         this.radiusPix = ((factor / 2) * (this.radiusReal) / (posReal[2] - camera.pos[2]));
         this.color = color;
         this.display = display;
@@ -157,6 +200,7 @@ class Point {
         this.radiusPix = (factor / 2 * (this.radiusReal) / (this.posReal[2] - camera.pos[2]));
     }
     draw() {
+        if (this.posReal[2] < camera.pos[2]) return;
         if (this.radiusReal !== 0.1) this.radiusPix = ((factor / 2) * (this.radiusReal) / (this.posReal[2] - camera.pos[2]));
         if (this.display) {
             ctx.beginPath();
@@ -172,11 +216,44 @@ function hueBasedOnheight(height) {
     return height * 30;
 }
 
+/**
+ * @param {number[]} pos1
+ * @param {number[]} pos2
+ */
+function distance3D(pos1, pos2) {
+    return Math.sqrt(((pos1[0] - pos2[0]) ** 2) + ((pos1[1] - pos2[1]) ** 2) + ((pos1[2] - pos2[2]) ** 2));
+}
+
+/**@param {...number[]} pos  */
+function averagePoint(...pos) {
+    const avg = [0, 0, 0];
+    for (let i = 0; i < pos.length; i++) {
+        if (typeof pos[i] === 'number') {
+            avg[0] += pos[i][0];
+            avg[1] += pos[i][1];
+            avg[2] += pos[i][2];
+        }
+        else {
+            //console.log(pos[i]);
+            avg[0] += pos[i].posReal[0];
+            avg[1] += pos[i].posReal[1];
+            avg[2] += pos[i].posReal[2];
+        }
+    }
+    //console.log(avg);
+    return [avg[0] / pos.length, avg[1] / pos.length, avg[2] / pos.length];
+
+}
+
+function averageOf3d(array) {
+    return (array[0] + array[1] + array[2]) / 3
+}
+
 class Line {
     static all = {};
     //static hue=0;
     /**appects ONLY pixPoints */
-    constructor(p1, p2, display, color = `hsl(220,100%,50%)`, linewidth = 1) {
+    constructor(p1, p2, display, color = `hsl(${hueBasedOnheight((this.p1.posReal[1] + this.p2.posReal[1]) / 2)},100%,50%)`, linewidth = 1) {
         this.p1 = p1;
         this.p2 = p2;
         this.x1 = p1.posPix[0];
@@ -191,7 +268,10 @@ class Line {
         this.display = display;
         this.id = `${p1.id},${p2.id}`;
         //Line.hue+=10;
-        this.color = `hsl(${hueBasedOnheight((this.p1.posReal[1] + this.p2.posReal[1]) / 2)},100%,50%)`;
+        let opacity;
+        try { opacity = averageOf3d(averagePoint(averagePoint(p1, p2), camera.pos)) } catch { opacity = 1 };
+        //let k = "rgba(23, 139, 255, 0.26)"
+        this.color = `rgba(${hslToRgb(color)},${opacity}`;
         this.linewidth = linewidth;
         //this.linewidth1 = linewidth/10;
         Line.all[this.id] = this;
@@ -223,7 +303,7 @@ class Triangle {
      * 
      * @param {Point[]} points 
      */
-    constructor(points, id = `${Math.random()}`) {
+    constructor(points, id = Object.keys(Triangle.all).length + 1 /*`${distance3D(averagePoint(points[0],points[1],points[2]), camera.pos)}`*/) {
         this.points = points;
         this.id = id;
         this.color = `hsl(${hueBasedOnheight((this.points[0].posReal[1] + this.points[1].posReal[1] + this.points[2].posReal[1]) / 3)},100%,50%)`;
@@ -234,9 +314,9 @@ class Triangle {
         let pointsOuttaBounds = 0;
         for (let i = 0; i < this.points.length; i++) {
             //if more than two points is outside bounds don't make triangle
-            if (this.points[i].extra === 2) {
+            if (this.points[i].extra === 2 || this.points[i].posPix[2] < camera.pos[2]) {
                 pointsOuttaBounds++;
-                if(pointsOuttaBounds===3){
+                if (pointsOuttaBounds === 3) {
                     region.closePath();
                     return;
                 }
@@ -332,13 +412,26 @@ function findCenter(points) {
     return [x / points.length, y / points.length, z / points.length]
 }
 
+function derivative(func, x, h = 0.0001) {
+    return Number(((func(x + h) - func(x)) / h).toPrecision(5));
+}
+function partialDerivative2d(func, x, y, vari, h = 0.0001) {
+    if (vari === 'x') {
+        return Number(((func(x + h, y) - func(x, y)) / h).toPrecision(5));
+    } else if (vari === 'y') {
+        return Number(((func(x, y + h) - func(x, y)) / h).toPrecision(5));
+    } else {
+        throw new Error("Invalid variable: " + vari + ". Use 'x' or 'y'.");
+    }
+}
+
 class Shape {
-    constructor(points, display, lines = undefined, triangles = undefined) {
+    constructor(points, display, lines = undefined, triangles = undefined, particles=null) {
         this.points = points;
         this.display = display;
         this.lines = lines;
         this.triangles = triangles;
-        if (points) this.center = new Point(findCenter(points), false);
+        if (points) this.center = new Point(findCenter(this.points), false);
     }
 
     changeDisplay() {
@@ -425,56 +518,11 @@ class Shape {
         }
         this.triangles = [];
     }
-}
-
-class Tretahedra extends Shape {
-    static all = {};
-    /**
-     * 
-     * @param {Point} p1 right;
-     * @param {Point} p2 left;
-     * @param {Point} p3 top;
-     * @param {Point} p4 back;
-     * 
-     * all points display must be false. unless this display is true;
-     * 
-    */
-    constructor(p1, p2, p3, p4, display = true, pointdisplay = false, color = 'hsl(200,100%,50%)') {
-        super();
-        this.points = [p1, p2, p3, p4];
-        this.p1 = p1;
-        this.p2 = p2;
-        this.p3 = p3;
-        this.p4 = p4;
-
-        let k = 0;
-        let l = 0;
-        let m = 0;
-        for (let i = 0; i < this.points.length; i++) {
-            k += this.points[i].posReal[0];
-            l += this.points[i].posReal[1];
-            m += this.points[i].posReal[2];
-        };
-        this.center = new Point([k / 4, l / 4, m / 4], pointdisplay);
-
-        this.lines = [];
-        let array = [p1, p2, p3, p4];
-        let c = 0;
-        for (let i = 0; i < array.length; i++) {
-            for (let j = 0; j < array.length; j++) {
-                if (array[j] !== array[i]) {
-                    this.lines.push(new Line(array[j], array[i], display));
-                    this.lines[c].color = color;
-                    c++;
-                }
-            }
-            array[i].display = pointdisplay;
-            array[i].color = color;
+    deleteAllParticles() {
+        for (let i = 0; i < this.particles.length; i++) {
+            delete Particle.all[this.particles[i].id];
         }
-        this.display = display;
-        this.color = color;
-        this.id = Math.random();
-        Tretahedra.all[this.id] = this;
+        this.particles = [];
     }
 }
 
@@ -540,171 +588,6 @@ class Cube extends Shape {
     }
 }
 
-class Pyramid extends Shape {
-    static all = {};
-    /**
-     * 
-     * @param {Point} p1 right;
-     * @param {Point} p2 left;
-     * @param {Point} p3 top;
-     * @param {Point} p4 backleft;
-     * @param {Point} p5 backright;
-     * 
-     * all points display must be false.
-     * 
-    */
-    constructor(p1, p2, p3, p4, p5, display = true, color = 'hsl(0,100%,50%)', pointdisplay = false, linewidth = 1) {
-        super();
-        this.points = [p1, p2, p3, p4, p5];
-        this.p1 = p1;
-        this.p2 = p2;
-        this.p3 = p3;
-        this.p4 = p4;
-        this.p5 = p5;
-        this.display = display;
-        this.color = color;
-        this.pointdisplay = pointdisplay;
-        this.linewidth = linewidth;
-
-        this.center = new Point(findCenter(p1, p2, p3, p4, p5), pointdisplay, this.color);
-
-        this.lines = [
-            new Line(p1, p3, display, color, linewidth),
-            new Line(p2, p3, display, color, linewidth),
-            new Line(p4, p3, display, color, linewidth),
-            new Line(p5, p3, display, color, linewidth),
-            new Line(p1, p2, display, color, linewidth),
-            new Line(p1, p5, display, color, linewidth),
-            new Line(p2, p4, display, color, linewidth),
-            new Line(p4, p5, display, color, linewidth)
-        ]
-
-        this.id = Math.random();
-        Pyramid.all[this.id] = this;
-    }
-
-}
-
-class Octahedron extends Shape {
-    static all = {};
-    /**
-     * 
-     * @param {Point} p1 right;
-     * @param {Point} p2 left;
-     * @param {Point} p3 top;
-     * @param {Point} p4 backleft;
-     * @param {Point} p5 backright;
-     * @param {Point} p6 bottom;
-     * 
-     * all points display must be false.
-     * 
-    */
-    constructor(p1, p2, p3, p4, p5, p6, display = true, color = 'hsl(0,100%,50%)', pointdisplay = false, linewidth = 1) {
-        super();
-        this.points = [p1, p2, p3, p4, p5, p6];
-        this.p1 = p1;
-        this.p2 = p2;
-        this.p3 = p3;
-        this.p4 = p4;
-        this.p5 = p5;
-        this.p6 = p6;
-        this.display = display;
-        this.color = color;
-        this.pointdisplay = pointdisplay;
-        this.linewidth = 1;
-
-        this.center = new Point(findCenter(p1, p2, p3, p4, p5, p6), pointdisplay, this.color);
-
-        this.lines = [
-            new Line(p1, p3, display, color, linewidth),
-            new Line(p2, p3, display, color, linewidth),
-            new Line(p4, p3, display, color, linewidth),
-            new Line(p5, p3, display, color, linewidth),
-            new Line(p1, p2, display, color, linewidth),
-            new Line(p1, p5, display, color, linewidth),
-            new Line(p2, p4, display, color, linewidth),
-            new Line(p4, p5, display, color, linewidth),
-            new Line(p1, p6, display, color, linewidth),
-            new Line(p2, p6, display, color, linewidth),
-            new Line(p4, p6, display, color, linewidth),
-            new Line(p5, p6, display, color, linewidth),
-        ]
-
-        this.id = Math.random();
-        Octahedron.all[this.id] = this;
-    }
-}
-
-class Sphere extends Shape {
-    constructor(center, radius, display = true, color = 'hsl(200,100%,50%)') {
-        super();
-        this.center = new Point(center, display, color);
-        this.radius = radius;
-        this.display = display;
-        this.color = color;
-        this.points = [];
-        this.lines = [];
-        let rS = radius;
-        let mqx = 3;
-        for (let i = 0; i < 6.1 * mqx; i++) {
-            for (let j = 0; j < 6.1 * mqx; j++) {
-                this.points.push(new Point([Math.cos(i) * Math.cos(j) * rS + center[0],
-                Math.sin(i) * rS + center[1], Math.sin(j) * Math.cos(i) * rS + center[2]], display, color));
-            }
-        }
-    }
-}
-
-class HyperSphere extends Shape {
-    constructor(center, radius, display = true, color = 'hsl(200,100%,50%)') {
-        super();
-        this.center = new Point(center, display, color);
-        this.radius = radius;
-        this.display = display;
-        this.color = color;
-        ///**@type {Point} */
-        this.points = [];
-        this.lines = [];
-        this.f4d = 0;
-    }
-    makePoints(angleW) {
-        //this.deleteAllPoints();
-        let rS = this.radius;
-        let mqx = 3;
-        this.f4d = Math.sin(angleW) * rS;
-        if (this.points.length === 0) {
-            for (let i = 0; i < 6.1 * mqx; i++) {
-                for (let j = 0; j < 6.1 * mqx; j++) {
-                    //console.log(Math.cos(i) * Math.cos(j) * Math.cos(angleW) * rS+this.center.posReal[0])
-                    this.points.push(new Point([
-                        Math.cos(i) * Math.cos(j) * Math.cos(angleW) * rS + this.center.posReal[0],
-                        Math.sin(i) * Math.cos(angleW) * rS + this.center.posReal[1],
-                        Math.sin(j) * Math.cos(i) * Math.cos(angleW) * rS + this.center.posReal[2]],
-                        this.display, this.color));
-                }
-            }
-        }
-        else {
-            let counter = 0;
-            for (let i = 0; i < 6.1 * mqx; i++) {
-                for (let j = 0; j < 6.1 * mqx; j++) {
-                    //console.log(Math.cos(i) * Math.cos(j) * Math.cos(angleW) * rS+this.center.posReal[0])
-                    this.points[counter].changeRealPosNoAdding([
-                        Math.cos(i) * Math.cos(j) * Math.cos(angleW) * rS + this.center.posReal[0],
-                        Math.sin(i) * Math.cos(angleW) * rS + this.center.posReal[1],
-                        Math.sin(j) * Math.cos(i) * Math.cos(angleW) * rS + this.center.posReal[2]])
-                    counter++;
-                }
-            }
-        }
-    }
-    deleteAllPoints() {
-        for (let i = 0; i < this.points.length; i++) {
-            delete Point.all[this.points[i].id];
-        }
-        this.points = [];
-    }
-}
 
 let allLetters = {};
 
@@ -726,50 +609,7 @@ class Letter extends Shape {
     doPixAndLines() { }
 }
 
-class LetterA extends Letter {
-    constructor(center, radius, rotate = true, display = true, color = 'hsl(100,100%,50%)', pointdisplay = false, id = `${Math.random() * 100}`) {
-        super(center, radius, rotate, display, color, pointdisplay, id);
-    }
-    doPixAndLines() {
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1], this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1], this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] - (this.radius), this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] - (this.radius * 2), this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] - (this.radius * 2), this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0], this.center.posReal[1] + (this.radius * 2), this.center.posReal[2]], this.pointdisplay, this.color));
-
-        this.lines.push(new Line(this.points[0], this.points[1], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[0], this.points[2], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[1], this.points[3], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[3], this.points[4], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[1], this.points[5], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[2], this.points[6], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[6], this.points[7], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[2], this.points[8], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[8], this.points[9], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[5], this.points[9], this.display, this.color, 2));
-    }
-}
-
-class Letter1 extends Letter {
-    constructor(center, radius, rotate = true, display = true, color = 'hsl(100,100%,50%)', pointdisplay = false, id = `${Math.random() * 100}`) {
-        super(center, radius, rotate, display, color, pointdisplay, id);
-    }
-    doPixAndLines() {
-        this.points.push(new Point([this.center.posReal[0], this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0], this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-
-        this.lines.push(new Line(this.points[1], this.points[3], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[1], this.points[2], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[4], this.points[5], this.display, this.color, 2));
-    }
-}
+//new Letter2([0, 0, -5], 1)
 
 class Letter5 extends Letter {
     constructor(center, radius, rotate = true, display = true, color = 'hsl(100,100%,50%)', pointdisplay = false, id = `${Math.random() * 100}`) {
@@ -792,56 +632,48 @@ class Letter5 extends Letter {
     }
 }
 
-class Letter3 extends Letter {
-    constructor(center, radius, rotate = true, display = true, color = 'hsl(100,100%,50%)', pointdisplay = false, id = `${Math.random() * 100}`) {
-        super(center, radius, rotate, display, color, pointdisplay, id);
+
+
+class Particle extends Point {
+    static all={}
+    /**
+     * 
+     * @param {number[]} posReal 
+     * @param {boolean} display 
+     * @param {string} color 
+     * @param {number} extra 
+     * @param {number[]} velocity 
+     * @param {number} typeOfEqu - 1 is Regular 3D equation: x+y; 2 is Parametric Surface has x&y; 3 is Vector Field; 4 is Parametric Curve
+     * @param {string} equ - Parsed and split by dimensions (Use usableEquation(equation) if not parsed)
+     */
+    constructor(posReal, velocity = [0, 0, 0], equ, typeOfEqu, display, color = `hsl(${distance3D(posReal, [0, 0, 0])}*10,100%,20%)`, extra = null,) {
+        super(posReal, display, color, extra);
+        this.velocity = velocity;
+        this.equ = equ
+        this.radiusReal=1;
+        this.radiusPix=((factor / 2) * (this.radiusReal) / (posReal[2] - camera.pos[2]));
+        this.typeOfEqu = typeOfEqu;
+        this.counter=0;
+        Particle.all[this.id]=this;
     }
-    doPixAndLines() {
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1], this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1], this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-
-        this.lines.push(new Line(this.points[2], this.points[1], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[1], this.points[3], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[3], this.points[4], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[4], this.points[5], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[5], this.points[6], this.display, this.color, 2));
-
-    }
-}
-
-class Letter7 extends Letter {
-    constructor(center, radius, rotate = true, display = true, color = 'hsl(100,100%,50%)', pointdisplay = false, id = `${Math.random() * 100}`) {
-        super(center, radius, rotate, display, color, pointdisplay, id);
-    }
-    doPixAndLines() {
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] + this.radius, this.center.posReal[1] + this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-        this.points.push(new Point([this.center.posReal[0] - this.radius, this.center.posReal[1] - this.radius, this.center.posReal[2]], this.pointdisplay, this.color));
-
-        this.lines.push(new Line(this.points[1], this.points[2], this.display, this.color, 2));
-        this.lines.push(new Line(this.points[2], this.points[3], this.display, this.color, 2));
-    }
-}
-
-class Numbers {
-    constructor(string, pos, radius, distancebetween) {
-        this.string = string;
-        this.characters = [];
-        for (let i = 0; i < string.length; i++) {
-            this.characters.push(eval(`new Letter${string[i]}([pos[0]+distancebetween,pos[1],pos[2]],radius)`))
+    update(dt){
+        if (this.typeOfEqu === 3) { //vector field
+            this.velocity = [
+                this.equ[0].evaluate({ x: this.posReal[0], y: this.posReal[1], z: this.posReal[2] })*dt,
+                this.equ[1].evaluate({ x: this.posReal[0], y: this.posReal[1], z: this.posReal[2] })*dt,
+                this.equ[2].evaluate({ x: this.posReal[0], y: this.posReal[1], z: this.posReal[2] })*dt
+            ]
         }
+        else {
+            throw new Error(`Particle:${this} has wrong typeOfEqu: ${this.typeOfEqu}.`);
+        }
+        super.changeRealPos(this.velocity);
+    }
+    draw() {
+        this.update(0.005);
+        super.draw();
     }
 }
-
-/*class VectorPoint extends Point{
-    constructor(pos,display,color,extra) {
-        super(pos,display,color,extra)
-    }
-}*/
 
 function cubePoints(center, radius) {
     let frd = new Point([center[0] + radius, center[1] - radius, center[2] - radius], false);
@@ -880,6 +712,10 @@ function replaceAlll(string, replacer, replacewith) {
     }
     return s
 }
+/** converts user-input equations into usable js */
+function usableEquation(expression) {
+    return math.parse(expression).compile()
+}
 
 let r;
 /**@type {Cube} */
@@ -912,10 +748,7 @@ let vectorGraph = false;
 function grapherEqu(equation = 'Math.cos(x)-Math.sin(y)', boundradius = 5, adder = universalAdder) {
 
     if (!graphing) return;
-    universalEquation = equation;
-    equation = replaceAlll(equation, 'cos', 'Math.cos');
-    equation = replaceAlll(equation, 'sin', 'Math.sin');
-    equation = replaceAlll(equation, 'sqrt', 'Math.sqrt');
+    let equationJS = universalEquation = usableEquation(equation);
     //equation=replaceAlll(equation,'tan','Math.tan');
 
     //new Numbers(`${boundradius}`, [boundradius, 0, 0], 0.5, 0);
@@ -950,7 +783,7 @@ function grapherEqu(equation = 'Math.cos(x)-Math.sin(y)', boundradius = 5, adder
             let c;
             let linedisplay = true;
             /**@type {Number} */
-            let output = eval(equation);
+            let output = equationJS.evaluate({ x: x, y: y });
 
             let rx = Math.floor((x + boundradius) / adder);
             let ry = Math.floor((y + boundradius) / adder);
@@ -958,15 +791,15 @@ function grapherEqu(equation = 'Math.cos(x)-Math.sin(y)', boundradius = 5, adder
             //console.log(equation, points)
             if (output <= boundradius && output >= -boundradius) {
                 c = new Point([x, -output, y], false, 'rgb(0,0,0)', 1);
-                
+
             }
             else if (output >= boundradius) {
-                
+
                 c = new Point([x, -boundradius, y], false, 'rgb(0,0,0)', 2);
                 linedisplay = false;
             }
             else if (output <= -boundradius) {
-                
+
                 c = new Point([x, boundradius, y], false, 'rgb(0,0,0)', 2);
                 linedisplay = false;
             }
@@ -982,26 +815,30 @@ function grapherEqu(equation = 'Math.cos(x)-Math.sin(y)', boundradius = 5, adder
             let p3 = matrixPoints[rx][ry - 1];
 
             if (p1) trianglest.push(new Triangle([p2, p1, c]));
-            if (p3 && p2 ) {
+            if (p3 && p2) {
                 trianglest.push(new Triangle([p3, p2, c]));
             }
 
-            
             //if this is not the first point graphed make a line
-            if (matrixPoints[rx].length > 1) {
+            /*if (matrixPoints[rx].length > 1) {
+
+                if (!matrixPoints[rx][matrixPoints[rx].length - 2]?.extra) {
+                    console.log(matrixPoints[rx][matrixPoints[rx].length - 2], rx, matrixPoints[rx].length - 2);
+                    break;
+                }
+
                 //if the point is in boundary add a line to it
                 if (matrixPoints[rx][matrixPoints[rx].length - 2].extra === 1) {
 
                     liness.push(new Line(
                         matrixPoints[rx][matrixPoints[rx].length - 1],
                         matrixPoints[rx][matrixPoints[rx].length - 2],
-                        linedisplay, 'rgb(0,255,0)',
+                        linedisplay, 'hsl(100,100%,50%)',
                     ));
 
                 }
             }
-            
-            
+
 
             //if this is not the first array add a line to a point
             if (matrixPoints[rx - 1]) {
@@ -1013,16 +850,17 @@ function grapherEqu(equation = 'Math.cos(x)-Math.sin(y)', boundradius = 5, adder
                         liness.push(new Line(
                             matrixPoints[rx - 1][matrixPoints[rx].length - 1],
                             matrixPoints[rx][matrixPoints[rx].length - 1],
-                            linedisplay, 'rgb(0,255,0)',
+                            linedisplay, 'hsl(100,100%,50%)',
                         ));
 
                     }
                 }
-            }
-            
+            }*/
 
         }
     }
+
+    //console.log(matrixPoints);
 
     r = new Shape(points, true, liness);
 
@@ -1033,16 +871,20 @@ function grapherEqu(equation = 'Math.cos(x)-Math.sin(y)', boundradius = 5, adder
     //r.rotateByPointXYZ(Math.PI*2-rX,Math.PI*2-rY,Math.PI*2-rZ,cube.center);
     //cube.rotateByPointXYZ(-rX,-rY,-rZ,cube.center)
 }
-function grapherPointEqu(pointsEq, boundradius = 5, adder = universalAdder) {
+function grapherParametricEqu(pointsEq, boundradius = 5, adder = 0.1) {
 
     if (!graphing) return
     universalEquation = pointsEq;
-    pointsEq = replaceAlll(pointsEq, 'cos', 'Math.cos');
-    pointsEq = replaceAlll(pointsEq, 'sin', 'Math.sin');
-    pointsEq = replaceAlll(pointsEq, 'sqrt', 'Math.sqrt');
     //pointsEq=replaceAlll(pointsEq,'tan','Math.tan');
 
     pointsEq = pointsEq.split(',')
+    console.log(usableEquation(pointsEq[2]));
+    let equationJS = [
+        usableEquation(pointsEq[0]),
+        usableEquation(pointsEq[1]),
+        usableEquation(pointsEq[2])
+    ];
+    console.log(equationJS)
     //console.log(pointsEq)
 
     if (r) {
@@ -1070,10 +912,18 @@ function grapherPointEqu(pointsEq, boundradius = 5, adder = universalAdder) {
             let c;
             let linedisplay = true;
 
-            let outputs = [eval(pointsEq[0]), -eval(pointsEq[1]), eval(pointsEq[2])]
-            if(Math.abs(outputs[0]) > boundradius || Math.abs(outputs[1]) > boundradius || Math.abs(outputs[2]) > boundradius) 
-                c = new Point(outputs, false, 'rgb(0,0,0)', 2);
-            else c = new Point(outputs, false, 'rgb(0,0,0)', 1);
+            let outputs = [
+                equationJS[0].evaluate({ x: x, y: y }),
+                equationJS[1].evaluate({ x: x, y: y }),
+                equationJS[2].evaluate({ x: x, y: y })
+            ]
+            //prevents from rendering if outside the box
+            if (
+                Math.abs(outputs[0]) > boundradius ||
+                Math.abs(outputs[1]) > boundradius ||
+                Math.abs(outputs[2]) > boundradius
+            ) c = new Point(outputs, false, 'rgb(150, 45, 45)', 2);
+            else c = new Point(outputs, false, 'rgb(201, 76, 76)', 1);
 
             points.push(c);
 
@@ -1083,29 +933,35 @@ function grapherPointEqu(pointsEq, boundradius = 5, adder = universalAdder) {
             if (rx === Math.floor((boundradius * 2) / adder)) break;
             matrixPoints[rx].push(c);
 
-            if (rx === Math.floor((boundradius * 2) / adder)) break;
-            matrixPoints[rx].push(c);
+            //if (rx === Math.floor((boundradius * 2) / adder)) break;
+            //matrixPoints[rx].push(c);
 
             if (rx === 0) break;
-            let p1 = matrixPoints[rx - 1][ry + 1];
-            let p2 = matrixPoints[rx - 1][ry];
-            let p3 = matrixPoints[rx][ry - 1];
+            //let p1 = matrixPoints[rx - 1][ry + 1];
+            //let p2 = matrixPoints[rx - 1][ry];
+            //let p3 = matrixPoints[rx][ry - 1];
 
-            if (p1) trianglest.push(new Triangle([p2, p1, c]));
-            if (p3 && p2 ) {
-                trianglest.push(new Triangle([p3, p2, c]));
-            }
+            //if (p1) trianglest.push(new Triangle([p2, p1, c]));
+            //if (p3 && p2) {
+            //   trianglest.push(new Triangle([p3, p2, c]));
+            //}
 
-            /*
+
             //if this is not the first point graphed make a line
             if (matrixPoints[rx].length > 1) {
+
+                if (!matrixPoints[rx][matrixPoints[rx].length - 2]?.extra) {
+                    console.log(matrixPoints[rx][matrixPoints[rx].length - 2], rx, matrixPoints[rx].length - 2);
+                    break;
+                }
+
                 //if the point is in boundary add a line to it
                 if (matrixPoints[rx][matrixPoints[rx].length - 2].extra === 1) {
 
                     liness.push(new Line(
                         matrixPoints[rx][matrixPoints[rx].length - 1],
                         matrixPoints[rx][matrixPoints[rx].length - 2],
-                        linedisplay, 'rgb(0,255,0)',
+                        linedisplay, 'hsl(100,100%,50%)',
                     ));
 
                 }
@@ -1113,24 +969,28 @@ function grapherPointEqu(pointsEq, boundradius = 5, adder = universalAdder) {
 
             //if this is not the first array add a line to a point
             if (matrixPoints[rx - 1]) {
+                //console.log('wah')
                 //and if the point exists add a line to it
                 if (matrixPoints[rx - 1][matrixPoints[rx].length - 1]) {
+                    //console.log('tah')
                     //and if the point is in the boundary add a line to it
                     if (matrixPoints[rx - 1][matrixPoints[rx].length - 1].extra === 1) {
-
+                        //console.log('bah')
+                        //if(!matrixPoints[rx - 1][matrixPoints[rx].length - 1] || !matrixPoints[rx][matrixPoints[rx].length - 2])
+                        //    console.log(matrixPoints[rx - 1][matrixPoints[rx].length - 1], matrixPoints[rx][matrixPoints[rx].length - 2]);
                         liness.push(new Line(
                             matrixPoints[rx - 1][matrixPoints[rx].length - 1],
                             matrixPoints[rx][matrixPoints[rx].length - 1],
-                            linedisplay, 'rgb(0,255,0)',
+                            linedisplay, 'hsl(100,100%,50%)',
                         ));
 
                     }
                 }
-            }*/
+            }
 
         }
     }
-
+    //console.log(matrixPoints);
     r = new Shape(points, true, liness);
 
     triangles = new Shape(points, true, undefined, trianglest);
@@ -1140,96 +1000,145 @@ function grapherPointEqu(pointsEq, boundradius = 5, adder = universalAdder) {
 function rotateGraph(x, y, z) {
     rX += x; rY += y; rZ += z;
     r.rotateByPointXYZ(x, y, z, cube.center);
+
     cube.rotateByPointXYZ(x, y, z, cube.center);
 }
+
+function makeShorterTheMagnitude(pos1, pos2, shortener) {
+    return [(pos1[0] - pos2[0]) / shortener + pos2[0],
+    (pos1[1] - pos2[1]) / shortener + pos2[1],
+    (pos1[2] - pos2[2]) / shortener + pos2[2]
+    ]
+}
+
 
 let rX = 0; let rY = 0; let rZ = 0;
 
 function vectorGraphing(equationX, equationY, equationZ, adder = 1) {
     //if (!vectorGraph) return;
 
-    equationX = replaceAlll(equationX, 'cos', 'Math.cos');
-    equationX = replaceAlll(equationX, 'sin', 'Math.sin');
-    equationX = replaceAlll(equationX, 'sqrt', 'Math.sqrt');
-    equationY = replaceAlll(equationY, 'cos', 'Math.cos');
-    equationY = replaceAlll(equationY, 'sin', 'Math.sin');
-    equationY = replaceAlll(equationY, 'sqrt', 'Math.sqrt');
-    equationZ = replaceAlll(equationZ, 'cos', 'Math.cos');
-    equationZ = replaceAlll(equationZ, 'sin', 'Math.sin');
-    equationZ = replaceAlll(equationZ, 'sqrt', 'Math.sqrt');
-
     if (r) {
         r.deleteAllLines();
         r.deleteAllPoints();
     }
+    if (triangles) {
+        triangles.deleteAllPoints();
+        triangles.deleteAllTriangles();
+    }
 
+    let equationJSX = usableEquation(equationX);
+    let equationJSY = usableEquation(equationY);
+    let equationJSZ = usableEquation(equationZ);
+
+    max = 3;
     let points = [];
     let lines = [];
     let vector = {};
     for (let x = -max; x <= max; x += adder) {
         for (let y = -max; y <= max; y += adder) {
             for (let z = -max; z <= max; z += adder) {
-
+                if (x == 0 && y == 0 && z == 0) continue;
+                let solvedX = equationJSX.evaluate({ x: x, y: y, z: z });
+                let solvedY = equationJSY.evaluate({ x: x, y: y, z: z });
+                let solvedZ = equationJSZ.evaluate({ x: x, y: y, z: z });
                 points.push(new Point([x, y, z], false));
-                points.push(new Point([eval(equationX), eval(equationY), eval(equationZ)], true, 'rgb(0,255,0)'));
-                lines.push(new Line(points[points.length - 1], points[points.length - 2], true));
+                points.push(new Point(makeShorterTheMagnitude([x, y, z], [solvedX, solvedY, solvedZ], 1.1), true, 'rgba(255, 255, 255, 0.13)'));
+                lines.push(new Line(points[points.length - 1], points[points.length - 2], true,
+                    `hsl(${distance3D([x, y, z], [solvedX, solvedY, solvedZ]) * 10},100%,50%)`));
 
-                vector[`${x},${y},${z}`] = [
+                /*vector[`${x},${y},${z}`] = [
                     Number((points[points.length - 1].posReal[0] - points[points.length - 2].posReal[0]).toPrecision(3)),
                     Number((points[points.length - 1].posReal[1] - points[points.length - 2].posReal[1]).toPrecision(3)),
                     Number((points[points.length - 1].posReal[2] - points[points.length - 2].posReal[2]).toPrecision(3)),
-                ]
+                ]*/
 
             }
         }
     }
     //console.log(vector)
+    points.push(new Particle([0.1,0.1,0.1],[0,0,0],[
+        equationJSX,
+        equationJSY,
+        equationJSZ
+    ],3,true,"hsl(222, 100%, 77%)"));
+    r = new Shape(points, true, lines, null);
+    newCube(5);
+}
+
+function parametricLineGraphing(equationX, equationY, equationZ, adder = 0.01) {
+
+    let equationJSX = usableEquation(equationX);
+    let equationJSY = usableEquation(equationY);
+    let equationJSZ = usableEquation(equationZ);
+
+    if (r) {
+        r.deleteAllLines();
+        r.deleteAllPoints();
+    }
+    if (triangles) {
+        triangles.deleteAllPoints();
+        triangles.deleteAllTriangles();
+    }
+
+    boundary = 5;
+    //to put all the points and lines into one shape
+    let points = [];
+    let lines = [];
+    //let vector = {};
+    for (let im = 0; im < 10; im++) {
+        let x, y, z, t = 0;
+        let startX = x = equationJSX.evaluate({ t: t });
+        let startY = y = equationJSY.evaluate({ t: t });
+        let startZ = z = equationJSZ.evaluate({ t: t });
+
+        points.push(new Point([x, y, z], false));
+        //let startX,startY,startZ
+        for (let t = 0.1; t < 3.141592 * 2; t += adder) {
+            startX = equationJSX.evaluate({ t: t });
+            startY = equationJSY.evaluate({ t: t });
+            startZ = equationJSZ.evaluate({ t: t });
+
+            points.push(new Point([startX, startY, startZ]))
+
+            //since eval is a function we have to change the x,y,z because eval uses them
+            x = startX
+            y = startY
+            z = startZ
+
+            lines.push(new Line(points[points.length - 2], points[points.length - 1], true,
+                `hsl(${distance3D(points[points.length - 2].posReal, points[points.length - 1].posReal) * 10},100%,50%)`
+            ));
+            //console.log(points[i*im + i].posReal, points[i*im + 1 + i].posReal);
+
+        }
+    }
+
+
+    //console.log(vector)
     r = new Shape(points, true, lines);
     newCube(5);
 }
-//vectorGraphing('x+(sin(x-y)/10)','y+((y+z)/10)','z+((z+x)/10)');
-//grapherPointEqu("x+y,(x)*sin(-75*3.141592/180)-(x*x+y*y)*cos(-75*3.141592/180),(x*x)/10+(y*y)/10", 5, 0.2);
-//grapherPointEqu("x,sin(noiser()),y", 5, 0.5)
-//grapherEqu('(sqrt((x**2)+(y**2)))-5');
-grapherEqu('x**2 + y**2 - 5')
-/*wait(1000, ()=>{
-    grapherEqu('x+2', 7, 0.5);
-    universalEquation = 'x+2';
-})
-universalEquation = '(sqrt((x**2)+(y**2)))-5';*/
+
+//vectorGraphing('cos(x)','0','sin(x)');
+grapherParametricEqu("(3+2*sin(x))*cos(y),(3+2*sin(x))*sin(y),2*cos(x)", 5, 0.2);
+//grapherEqu('(sqrt((x^2)+(y^2)))-5');
+//grapherEqu('x^2 + y^2 - 5')
+// for vectors (x)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (x)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 ), (y)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (y)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 ), ((z-1))/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - ((z+1))/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )
+//universalEquation = '(sqrt((x**2)+(y**2)))-5';*/
+/*parametricLineGraphing(
+    '(x)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (x)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )',
+    '(y)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (y)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )',
+    '((z-1))/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - ((z+1))/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )',
+    0.25
+)*/
+//parametricLineGraphing('sin(t)+2*sin(2*t)','cos(t)-2*cos(2*t)','-sin(3*t)') // Trinity knot
+//parametricLineGraphing('cos(t)','sin(t)','t/2') //helix
+//parametricLineGraphing('(4+cos(15*t))*cos(t)', 'sin(15*t)', '(4+cos(15*t))*sin(t)') // helix torus
 
 
 function randomArthemic(a, b) {
     return Math.random() < 0.5 ? a + b : a - b;
 }
-
-/*let points=[
-    new Point([0,0,0],false),
-    new Point([0,-5,0],false),
-    new Point([0,0,5],false),
-    new Point([5,0,0],false),
-    new Point([-3,0,-3],false)
-]
-
-let lines =[
-    new Line(points[0],points[1],true),
-    new Line(points[0],points[2],true),
-    new Line(points[0],points[3],true),
-    new Line(points[0],points[4],true)
-]
-
-let t = new Shape(points,true,lines);
-
-setInterval(()=>{
-    t.rotateByYPoint(1/30,points[0])
-},10)*/
-
-/*let rig = new Point([1,2,1],true);
-let left = new Point([-1,2,1],true);
-let backleft = new Point([-1,2,3],true);
-let backrig = new Point([1,2,3],true);
-let topp = new Point([0,0,2],true);
-let bottom = new Point([0,4,2],true);*/
 
 
 addEventListener('keydown', (e) => {
@@ -1350,19 +1259,20 @@ function rndmFlr(num) {
 function xroot(x, y) {
     return Math.pow(y, 1 / x);
 }
-
+function trueRandom() {
+    return Math.random() < 0.5 ? Math.random() : -Math.random()
+}
 function animate() {
     ctx.fillStyle = 'rgb(25, 28, 35)';
     ctx.fillRect(0, 0, cw, ch);
     for (let i in Point.all) {
-        Point.all[i].draw();
-
+            Point.all[i].draw();
     }
     for (let i in Line.all) {
         Line.all[i].draw();
     }
     for (let i in Triangle.all) {
-        Triangle.all[i].draw()
+        Triangle.all[i].draw();
     }
 }
 
@@ -1370,6 +1280,7 @@ function animate() {
 
 let animation = setInterval(animate, 10);
 
+
 function stopAnimate() {
     clearInterval(animation);
-}sqrt(((x*x)+((x**2)**2))/((Math.tan(Math.atan((x**2)/x)+90)**2)+1)),y, -Math.tan(Math.atan((x**2)/x)+90)*sqrt(((x*x)+((x**2)**2))/((Math.tan(Math.atan((x**2)/x)+90)**2)+1))
+}
