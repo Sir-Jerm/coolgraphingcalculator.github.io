@@ -322,6 +322,7 @@ function grapherParametricEqu(pointsEq, boundradius = 5, adder = 0.1) {
     newCube(boundradius);
 }
 function rotateGraph(x, y, z) {
+    if(!(outputtedShape&&cube)) return //if they do not exist there is not point in trying to rotate them
     outputtedShapeX += x; outputtedShapeY += y; outputtedShapeZ += z;
     outputtedShape.rotateByPointXYZ(x, y, z, cube.center);
 
