@@ -1,25 +1,9 @@
-//import math from 'https://cdn.jsdelivr.net/npm/mathjs@11/lib/browser/math.js'; 
 import { Point } from "./js/points.js";
 import { Line } from "./js/lines.js"
 import { Triangle } from "./js/triangles.js";
 import { Shape, Cube, Letter, Letter5, allLetters } from "./js/shapes.js";
 import { rotateGraph, outputtedShapeZ, outputtedShapeX, outputtedShapeY, outputtedShape, vectorGraph, graphing, grapherParametricEqu, grapherEqu, vectorGraphing, setUniversalAdder, universalAdder, universalEquation } from "./js/calculator.js";
-
-
-console.log(Point.all, Line.all, Triangle.all, Shape, Cube.all) //in
-
-let canvas = document.querySelector('canvas');
-let ctx = canvas.getContext('2d');
-
-let ch = canvas.height = innerHeight;
-let cw = canvas.width = innerWidth;
-
-let camera = {
-    pos: [0, 0, -10],
-}
-
-let max = 3;
-let factor = cw / (max * 2);
+import {canvas, ctx, max, cw, ch, camera, factor} from "./js/scene.js"
 
 function changeCameraPos(pos) {
     camera.pos = pos
@@ -149,11 +133,15 @@ canvas.addEventListener('mousemove', (e) => {
     }
 })
 
+//console.log(new Point([0,0,-1], true, "rgb(255, 0, 0)", 1));
+//console.log(new Point([0,0,-9], true, "rgb(255, 0, 0)", 1));
+
 function animate() {
+    requestAnimationFrame(animate)
     ctx.fillStyle = 'rgb(25, 28, 35)';
     ctx.fillRect(0, 0, cw, ch);
     for (let i in Point.all) {
-            Point.all[i].draw();
+        Point.all[i].draw();
     }
     for (let i in Line.all) {
         Line.all[i].draw();
@@ -163,22 +151,22 @@ function animate() {
     }
 }
 
+animate()
+
 //sqrt(((x*x)+((x**2)**2))/((Math.tan(Math.atan((x**2)/x)+90)**2)+1)),y, -Math.tan(Math.atan((x**2)/x)+90)*sqrt(((x*x)+((x**2)**2))/((Math.tan(Math.atan((x**2)/x)+90)**2)+1))
 
-let animation = setInterval(animate, 10);
-
-
-function stopAnimate() {
-    clearInterval(animation);
-}
-
-function setMax(value){max=value};
-
-export {
-    cw,
-    ctx,
-    max,
-    setMax,
-    camera,
-    factor,
-}
+//vectorGraphing('cos(x)','0','sin(x)');
+grapherParametricEqu("(5*sin(x))*cos(y),(5*sin(x))*sin(y),5*cos(x)", 5, 0.2);
+//grapherEqu('(sqrt((x^2)+(y^2)))-5');
+//grapherEqu('x^2 + y^2 - 5')
+// for vectors (x)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (x)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 ), (y)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (y)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 ), ((z-1))/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - ((z+1))/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )
+//universalEquation = '(sqrt((x**2)+(y**2)))-5';*/
+/*parametricLineGraphing(
+    '(x)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (x)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )',
+    '(y)/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - (y)/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )',
+    '((z-1))/( (x*x + y*y + (z-1)*(z-1) + 0.1)**1.5 )  - ((z+1))/( (x*x + y*y + (z+1)*(z+1) + 0.1)**1.5 )',
+    0.25
+)*/
+//parametricLineGraphing('sin(t)+2*sin(2*t)','cos(t)-2*cos(2*t)','-sin(3*t)') // Trinity knot
+//parametricLineGraphing('cos(t)','sin(t)','t/2') //helix
+//parametricLineGraphing('(4+cos(15*t))*cos(t)', 'sin(15*t)', '(4+cos(15*t))*sin(t)') // helix torus
