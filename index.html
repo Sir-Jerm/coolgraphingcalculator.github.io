@@ -20,6 +20,16 @@
         </p>
         <div style="width:fit-content;height: auto; margin-left: 2px;">
             <div>
+                <input style="width:50vw" type="text" id="metric" value="sqrt(((x1 - x2) ^ 2) + ((y1 - y2) ^ 2) + ((z1-z2) ^ 2))">
+                <button id="enterMetric" onclick=""
+                >Enter Metric Function</button>
+                <p>
+                    Examples: sqrt(((x1 - x2) ^ 2) + ((y1 - y2) ^ 2) + ((z1-z2) ^ 2)) ||| abs((x1 - x2)) + abs((y1 - y2)) + abs(z1-z2) ||| max(abs(x1 - x2), abs(y1 - y2), abs(z1-z2)).
+                    x1, y1, z1 and x2, y2, z2 are variables. 
+                </p>
+            </div>
+
+            <div>
                 <input style="width:50vw" type="text" id="vectors" value="Vector Equations only">
                 <button id="enterVE" onclick=""
                 >Enter Vector Equations</button>
@@ -95,6 +105,8 @@
         <script type="module" src="./js/shapes.js" async defer></script>
         <script type="module" src="./js/triangles.js" async defer></script>
         <script type="module" src="./js/calculator.js" async defer></script>
+        <script type="module" src="./js/scene.js" async defer></script>
+        <script type="module" src="./js/metric.js" async defer></script>
         <script src="https://cdn.jsdelivr.net/npm/mathjs@11/lib/browser/math.js"></script>
     </body>
 </html>
