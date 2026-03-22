@@ -25,3 +25,13 @@ Points are projected from 3D to 2D using a manual perspective function:
 - 3D coordinates are converted to 2D canvas pixels with a perspective scale
 - Point radius decreases with distance to simulate depth
 - Points are stored globally for easy updates and rendering
+
+----------
+
+### Desmos Examples
+
+Desmos websites:
+
+- For Metric Function: https://www.desmos.com/calculator/r6gg89pz9l
+- For Vector Scaling: https://www.desmos.com/calculator/t4mcxzfy2i
+- For Perspective Rendering: https://www.desmos.com/calculator/ajuuhjxbe8
